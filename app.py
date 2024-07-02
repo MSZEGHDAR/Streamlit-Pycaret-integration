@@ -8,6 +8,9 @@ import plotly.express as px
 from PIL import Image
 import requests
 from io import BytesIO
+from collections import Counter
+from imblearn.over_sampling import SMOTE
+from sklearn.model_selection import train_test_split
 
 def save_file(file):
     with open(os.path.join(os.getcwd(), file.name), "wb") as f:
@@ -148,11 +151,35 @@ def ml_page():
             max_size = len(data)
             subset_size = st.slider("Select subset size", min_value=min(100, max_size), max_value=max_size, value=min(1000, max_size))
             if subset_size < max_size:
-                data = data.sample(n=subset_size, random_state=101)
+                data = data.sample(n=subset_size, random_state=42)
             else:
                 st.warning(f"Using full dataset ({max_size} rows) as subset size equals or exceeds total rows.")
 
         target = st.selectbox("Select target variable", data.columns)
+        
+        class_distribution = Counter(data[target])
+        st.write("Class distribution:", class_distribution)
+        
+        min_samples = min(class_distribution.values())
+        if min_samples < 2:
+            st.warning(f"The least populated class has only {min_samples} sample(s). This may cause issues with model training.")
+            
+            handle_imbalance = st.radio(
+                "How would you like to handle this?",
+                ("Remove rare classes", "Apply oversampling (SMOTE)", "Proceed anyway")
+            )
+            
+            if handle_imbalance == "Remove rare classes":
+                min_samples_threshold = st.slider("Minimum samples per class", min_value=2, max_value=10, value=2)
+                data = data[data[target].isin([cls for cls, count in class_distribution.items() if count >= min_samples_threshold])]
+                st.write("Updated class distribution:", Counter(data[target]))
+            elif handle_imbalance == "Apply oversampling (SMOTE)":
+                X = data.drop(columns=[target])
+                y = data[target]
+                smote = SMOTE(random_state=42)
+                X_resampled, y_resampled = smote.fit_resample(X, y)
+                data = pd.concat([X_resampled, y_resampled], axis=1)
+                st.write("Updated class distribution after SMOTE:", Counter(data[target]))
         
         if st.button('Setup Model'):
             try:
@@ -162,7 +189,8 @@ def ml_page():
                 st.success('Setup complete. Ready to train models.')
             except Exception as e:
                 st.error(f"Error during setup: {str(e)}")
-
+                st.error("Please try adjusting your data or selecting a different target variable.")
+                
         if 'setup' in st.session_state:
             if st.button('Train and Compare Models'):
                 try:
