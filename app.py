@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 from ydata_profiling import ProfileReport
-from pycaret.classification import setup, compare_models, predict_model, pull, save_model, load_model
+from pycaret.classification import setup as setup_clf, compare_models as compare_models_clf, predict_model as predict_model_clf, pull as pull_clf, save_model as save_model_clf, load_model as load_model_clf
 from pycaret.regression import setup as setup_reg, compare_models as compare_models_reg, predict_model as predict_model_reg, pull as pull_reg, save_model as save_model_reg, load_model as load_model_reg
 import plotly.express as px
 from PIL import Image
@@ -12,6 +12,8 @@ from io import BytesIO
 from collections import Counter
 from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import train_test_split
+
+
 
 def save_file(file):
     with open(os.path.join(os.getcwd(), file.name), "wb") as f:
@@ -159,32 +161,7 @@ def ml_page():
         target = st.selectbox("Select target variable", data.columns)
         
         ml_task = st.radio("Select ML task", ["Classification", "Regression"])
-        
-        if ml_task == "Classification":
-            class_distribution = Counter(data[target])
-            st.write("Class distribution:", class_distribution)
-            
-            min_samples = min(class_distribution.values())
-            if min_samples < 2:
-                st.warning(f"The least populated class has only {min_samples} sample(s). This may cause issues with model training.")
-                
-                handle_imbalance = st.radio(
-                    "How would you like to handle this?",
-                    ("Remove rare classes", "Apply oversampling (SMOTE)", "Proceed anyway")
-                )
-                
-                if handle_imbalance == "Remove rare classes":
-                    min_samples_threshold = st.slider("Minimum samples per class", min_value=2, max_value=10, value=2)
-                    data = data[data[target].isin([cls for cls, count in class_distribution.items() if count >= min_samples_threshold])]
-                    st.write("Updated class distribution:", Counter(data[target]))
-                elif handle_imbalance == "Apply oversampling (SMOTE)":
-                    X = data.drop(columns=[target])
-                    y = data[target]
-                    smote = SMOTE(random_state=42)
-                    X_resampled, y_resampled = smote.fit_resample(X, y)
-                    data = pd.concat([X_resampled, y_resampled], axis=1)
-                    st.write("Updated class distribution after SMOTE:", Counter(data[target]))
-        
+
         if st.button('Setup Model'):
             try:
                 with st.spinner('Setting up model...'):
@@ -275,5 +252,6 @@ def ml_page():
                             st.dataframe(prediction)
                         except Exception as e:
                             st.error(f"Error making prediction: {str(e)}")
+
 if __name__ == "__main__":
     main()
