@@ -157,35 +157,42 @@ def ml_page():
 
         target = st.selectbox("Select target variable", data.columns)
         
-        class_distribution = Counter(data[target])
-        st.write("Class distribution:", class_distribution)
+        ml_task = st.radio("Select ML task", ["Classification", "Regression"])
         
-        min_samples = min(class_distribution.values())
-        if min_samples < 2:
-            st.warning(f"The least populated class has only {min_samples} sample(s). This may cause issues with model training.")
+        if ml_task == "Classification":
+            class_distribution = Counter(data[target])
+            st.write("Class distribution:", class_distribution)
             
-            handle_imbalance = st.radio(
-                "How would you like to handle this?",
-                ("Remove rare classes", "Apply oversampling (SMOTE)", "Proceed anyway")
-            )
-            
-            if handle_imbalance == "Remove rare classes":
-                min_samples_threshold = st.slider("Minimum samples per class", min_value=2, max_value=10, value=2)
-                data = data[data[target].isin([cls for cls, count in class_distribution.items() if count >= min_samples_threshold])]
-                st.write("Updated class distribution:", Counter(data[target]))
-            elif handle_imbalance == "Apply oversampling (SMOTE)":
-                X = data.drop(columns=[target])
-                y = data[target]
-                smote = SMOTE(random_state=42)
-                X_resampled, y_resampled = smote.fit_resample(X, y)
-                data = pd.concat([X_resampled, y_resampled], axis=1)
-                st.write("Updated class distribution after SMOTE:", Counter(data[target]))
+            min_samples = min(class_distribution.values())
+            if min_samples < 2:
+                st.warning(f"The least populated class has only {min_samples} sample(s). This may cause issues with model training.")
+                
+                handle_imbalance = st.radio(
+                    "How would you like to handle this?",
+                    ("Remove rare classes", "Apply oversampling (SMOTE)", "Proceed anyway")
+                )
+                
+                if handle_imbalance == "Remove rare classes":
+                    min_samples_threshold = st.slider("Minimum samples per class", min_value=2, max_value=10, value=2)
+                    data = data[data[target].isin([cls for cls, count in class_distribution.items() if count >= min_samples_threshold])]
+                    st.write("Updated class distribution:", Counter(data[target]))
+                elif handle_imbalance == "Apply oversampling (SMOTE)":
+                    X = data.drop(columns=[target])
+                    y = data[target]
+                    smote = SMOTE(random_state=42)
+                    X_resampled, y_resampled = smote.fit_resample(X, y)
+                    data = pd.concat([X_resampled, y_resampled], axis=1)
+                    st.write("Updated class distribution after SMOTE:", Counter(data[target]))
         
         if st.button('Setup Model'):
             try:
                 with st.spinner('Setting up model...'):
-                    s = setup(data=data, target=target, session_id=42)
+                    if ml_task == "Classification":
+                        s = setup_clf(data=data, target=target, session_id=42)
+                    else:
+                        s = setup_reg(data=data, target=target, session_id=42)
                     st.session_state['setup'] = s
+                    st.session_state['ml_task'] = ml_task
                 st.success('Setup complete. Ready to train models.')
             except Exception as e:
                 st.error(f"Error during setup: {str(e)}")
@@ -195,13 +202,17 @@ def ml_page():
             if st.button('Train and Compare Models'):
                 try:
                     with st.spinner('Training models...'):
-                        # 3 best models
-                        best_models = compare_models(n_select=3)
+                        if st.session_state['ml_task'] == "Classification":
+                            best_models = compare_models_clf(n_select=3)
+                            model_results = pull_clf()
+                        else:
+                            best_models = compare_models_reg(n_select=3)
+                            model_results = pull_reg()
                         st.session_state['best_models'] = best_models
-                        model_results = pull()
                         st.dataframe(model_results)
                         
-                        fig = px.bar(model_results, x=model_results.index, y='Accuracy')
+                        metric = 'Accuracy' if st.session_state['ml_task'] == "Classification" else 'R2'
+                        fig = px.bar(model_results, x=model_results.index, y=metric)
                         st.plotly_chart(fig)
                 except Exception as e:
                     st.error(f"Error during model comparison: {str(e)}")
@@ -214,7 +225,10 @@ def ml_page():
                 if st.button('Save Selected Model'):
                     try:
                         model_index = model_names.index(selected_model)
-                        save_model(best_models[model_index], f'best_model_{selected_model}')
+                        if st.session_state['ml_task'] == "Classification":
+                            save_model_clf(best_models[model_index], f'best_model_{selected_model}')
+                        else:
+                            save_model_reg(best_models[model_index], f'best_model_{selected_model}')
                         st.success(f"{selected_model} saved successfully!")
                     except Exception as e:
                         st.error(f"Error saving model: {str(e)}")
@@ -226,7 +240,10 @@ def ml_page():
                     if st.button('Make Predictions on Loaded Data'):
                         try:
                             model_index = model_names.index(selected_model)
-                            predictions = predict_model(best_models[model_index], data=data)
+                            if st.session_state['ml_task'] == "Classification":
+                                predictions = predict_model_clf(best_models[model_index], data=data)
+                            else:
+                                predictions = predict_model_reg(best_models[model_index], data=data)
                             st.write(f"Predictions from {selected_model}:")
                             st.dataframe(predictions)
                             st.download_button(
@@ -249,11 +266,13 @@ def ml_page():
                         try:
                             custom_df = pd.DataFrame([custom_data])
                             model_index = model_names.index(selected_model)
-                            prediction = predict_model(best_models[model_index], data=custom_df)
+                            if st.session_state['ml_task'] == "Classification":
+                                prediction = predict_model_clf(best_models[model_index], data=custom_df)
+                            else:
+                                prediction = predict_model_reg(best_models[model_index], data=custom_df)
                             st.write(f"Prediction from {selected_model}:")
                             st.dataframe(prediction)
                         except Exception as e:
                             st.error(f"Error making prediction: {str(e)}")
-
 if __name__ == "__main__":
     main()
