@@ -4,6 +4,7 @@ import numpy as np
 import os
 from ydata_profiling import ProfileReport
 from pycaret.classification import setup, compare_models, predict_model, pull, save_model, load_model
+from pycaret.regression import setup as setup_reg, compare_models as compare_models_reg, predict_model as predict_model_reg, pull as pull_reg, save_model as save_model_reg, load_model as load_model_reg
 import plotly.express as px
 from PIL import Image
 import requests
